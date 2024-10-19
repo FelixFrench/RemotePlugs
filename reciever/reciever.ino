@@ -38,9 +38,16 @@ void loop() {
     Serial.print(" Command: ");
     Serial.print(GetRow(code));
     Serial.print(" ");
-    Serial.println(CommandStrings[GetCommand(code)]);
+    Serial.print(CommandStrings[GetCommand(code)]);
+    Serial.println(IsNewRemote(code) ? " (new)" : " (old)");
     mySwitch.resetAvailable();
   }
+}
+
+// Note: The new remote gives the same code for both as on, so it is not considered to have any way of signalling both.
+
+bool IsNewRemote(long code){
+  return code > 10000000;
 }
 
 int GetRow(long code)
@@ -48,23 +55,38 @@ int GetRow(long code)
   switch (code) {
     case 1332531:
     case 1332540:
-    case 1332543: return 0;
+    case 1332543:
+    case 15404668:
+    case 15404660:
+    return 0;
     
     case 1332675:
     case 1332684:
-    case 1332687: return 1;
+    case 1332687:
+    case 15404666:
+    case 15404658:
+    return 1;
       
     case 1332995:
     case 1333004:
-    case 1333007: return 2;
+    case 1333007:
+    case 15404665:
+    case 15404657:
+    return 2;
     
     case 1334531:
     case 1334540:
-    case 1334543: return 3;
+    case 1334543:
+    case 15404669:
+    case 15404661:
+    return 3;
     
     case 1340675:
     case 1340684:
-    case 1340687: return 4;
+    case 1340687:
+    case 15404667:
+    case 15404659:
+    return 4;
     
     default: return 5;
   }
@@ -77,19 +99,32 @@ COMMAND GetCommand(long code)
     case 1332675:
     case 1332995:
     case 1334531:
-    case 1340675: return COMMAND_ON;
+    case 1340675:
+    case 15404668:
+    case 15404666:
+    case 15404665:
+    case 15404669:
+    case 15404667:
+    return COMMAND_ON;
     
     case 1332540:
     case 1332684:
     case 1333004:
     case 1334540:
-    case 1340684: return COMMAND_OFF;
+    case 1340684:
+    case 15404660:
+    case 15404658:
+    case 15404657:
+    case 15404661:
+    case 15404659:
+    return COMMAND_OFF;
     
     case 1332543:
     case 1332687:
     case 1333007:
     case 1334543:
-    case 1340687: return COMMAND_BOTH;
+    case 1340687:
+    return COMMAND_BOTH;
     
     default: return COMMAND_UNKNOWN;
   }
