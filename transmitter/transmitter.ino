@@ -70,126 +70,138 @@ void setup() {
 
 void loop() {
 
-    // Get the current time.
-    Ds1302::DateTime now;
-    rtc.getDateTime(&now);
-    uint16_t nowMins = 60*now.hour + now.minute;
+  // Get the current time.
+  Ds1302::DateTime UTC;
+  rtc.getDateTime(&UTC);
 
-    // The sunrise and sunset times. These are updated once a day.
-    static int sunriseMins, sunsetMins;
+  // Update whether its daylight saving time once per hour. (Also runs on the first loop.)
+  static bool isBST;
+  static uint8_t last_hour = 0;
+  if(UTC.hour != last_hour){
+    last_hour = UTC.hour;
+    isBST = IsBST(UTC);
+  }
 
-    // Print the time once per second. (Also runs on the first loop.)
-    static uint8_t last_second = 0;
-    if ( now.second != last_second )
-    {
-        last_second = now.second;
+  // Get the current minutes since midnight in GMT or BST as required.
+  uint16_t dstMins = 60*((UTC.hour + (isBST ? 1 : 0)) % 24) + UTC.minute;
 
-        // Print the time
-        if ( now.hour < 10 ) Serial.print('0');
-        Serial.print(now.hour);    // 00-23
-        Serial.print(':');
-        if ( now.minute < 10 ) Serial.print('0');
-        Serial.print(now.minute);  // 00-59
-        Serial.print(':');
-        if ( now.second < 10 ) Serial.print('0');
-        Serial.print(now.second);  // 00-59
-        Serial.println();
+  // Update the sunset time once per day. (Also runs on the first loop.)
+  static int sunriseMins, sunsetMins;
+  static uint8_t last_day = 0;
+  if ( UTC.day != last_day ){
+    last_day = UTC.day;
+
+    // Get today's sunrise and sunset times.
+    static Dusk2Dawn d2d(Latitude, Longitude, Timezone);
+    sunriseMins = d2d.sunrise(UTC.year, UTC.month, UTC.day, isBST);
+    sunsetMins = d2d.sunset(UTC.year, UTC.month, UTC.day, isBST);
+
+    // Get strings of the new sunrise and sunset times and print them.
+    char sunriseStr[] = "00:00", sunsetStr[] = "00:00";
+    Dusk2Dawn::min2str(sunriseStr, sunriseMins);
+    Dusk2Dawn::min2str(sunsetStr, sunsetMins);
+
+    Serial.print("NEW DAY: Sunrise: ");
+    Serial.print(sunriseStr);
+    Serial.print(", sunset: ");
+    Serial.println(sunsetStr);
+  }
+
+  // Print the time once per second. (Also runs on the first loop.)
+  static uint8_t last_second = 0;
+  if ( UTC.second != last_second )
+  {
+    last_second = UTC.second;
+
+    // Print the time
+    Serial.print("20");
+    Serial.print(UTC.year);    // 00-99
+    Serial.print('.');
+    if (UTC.month < 10) Serial.print('0');
+    Serial.print(UTC.month);   // 01-12
+    Serial.print('.');
+    if (UTC.day < 10) Serial.print('0');
+    Serial.print(UTC.day);     // 01-31
+    Serial.print(' ');
+    if ( UTC.hour < 10 ) Serial.print('0');
+    Serial.print(UTC.hour);    // 00-23
+    Serial.print(':');
+    if ( UTC.minute < 10 ) Serial.print('0');
+    Serial.print(UTC.minute);  // 00-59
+    Serial.print(':');
+    if ( UTC.second < 10 ) Serial.print('0');
+    Serial.print(UTC.second);  // 00-59
+    Serial.print(" UTC ");
+    Serial.print(dstMins);
+    Serial.println();
+  }
+
+  // State machine.
+  static STATE mState = STATE_UNKNOWN;
+  switch(mState){
+  default: { // STATE_UNKNOWN
+    
+    // This code only runs after a reset: Figure out whether the lights should be on right now.
+    if ((sunsetMins < dstMins && dstMins < TIME_NIGHT_OFF) || (TIME_MORNING_ON < dstMins && dstMins < sunriseMins)){
+      mState = STATE_TURN_ON;
+    } else {
+      mState = STATE_TURN_OFF;
     }
+    break;
+  }
+  case STATE_TURN_ON:{
+
+    // Now that the LED has been turned on, spend a while transmitting ON.
+    Serial.print("Turn on");
+    mySwitch.send(CodeValues[ON_CHANNEL], 24);
+    Serial.println(" complete");
+    mState = STATE_ON;
+    break;
+  }
+  case STATE_ON: {
+
+    bool ButtonPressed = digitalRead(PIN_TOGGLE_BUTTON);
+    if (ButtonPressed) Serial.println("BUTTON");
   
-    // Update the sunset time once per day. (Also runs on the first loop.)
-    static uint8_t last_day = 0;
-    if ( now.day != last_day ){
-        last_day = now.day;
-
-        bool isBST = IsBST(now);
-
-        Serial.print("Daylight savings time ");
-        Serial.print(isBST ? "" : "not ");
-        Serial.println("active");
-
-        // Get today's sunrise and sunset times.
-        Dusk2Dawn d2d(Latitude, Longitude, Timezone);
-        sunriseMins = d2d.sunrise(now.year, now.month, now.day, isBST);
-        sunsetMins = d2d.sunset(now.year, now.month, now.day, isBST);
-
-        // Get strings of the new sunrise and sunset times and print them.
-        char sunriseStr[] = "00:00";
-        char sunsetStr[] = "00:00";
-        Dusk2Dawn::min2str(sunriseStr, sunriseMins);
-        Dusk2Dawn::min2str(sunsetStr, sunsetMins);
-
-        Serial.print("NEW DAY: Sunrise: ");
-        Serial.print(sunriseStr);
-        Serial.print(", sunset: ");
-        Serial.println(sunsetStr);
+    // Turn off at sunrise, the evening turn-off time or on a button press.
+    // There is no checking that the morning or evening start times are before the end times, the
+    //  off signal is always sent. This means the lights will be turned off even if they were turned on
+    //  by the toggle button or a different controller.
+    if ( dstMins == sunriseMins || dstMins == TIME_NIGHT_OFF || ButtonPressed ) {
+      mState = STATE_TURN_OFF;
     }
+    break;
+  }
+  case STATE_TURN_OFF:{
 
-    // State machine.
-    static STATE mState = STATE_UNKNOWN;
-    switch(mState){
-    default: { // STATE_UNKNOWN
-      
-        // This code only runs after a reset: Figure out whether the lights should be on right now.
-        if ((sunsetMins < nowMins && nowMins < TIME_NIGHT_OFF) || (TIME_MORNING_ON < nowMins && nowMins < sunriseMins)){
-            mState = STATE_TURN_ON;
-        } else {
-            mState = STATE_TURN_OFF;
-        }
-        break;
+    // Now that the LED has been turned off, spend a while transmitting OFF.
+    Serial.print("Turn off");
+    mySwitch.send(CodeValues[OFF_CHANNEL], 24);
+    Serial.println(" complete");
+    mState = STATE_OFF;
+    break;
+  }
+  case STATE_OFF: {
+
+    bool ButtonPressed = digitalRead(PIN_TOGGLE_BUTTON);
+    if (ButtonPressed) Serial.println("BUTTON");
+
+    // A morning turn-on is only required if the turn-on time is before sunrise
+    bool MorningTurnOn = (dstMins == TIME_MORNING_ON) && (TIME_MORNING_ON < sunriseMins);
+
+    // An evening turn-on is only required if the turn-off time is after sunset
+    bool EveningTurnOn = (dstMins == sunsetMins) && (TIME_NIGHT_OFF > sunsetMins);
+    
+    // Turn on at the morning turn-on time, at sunset or on a button press
+    if ( MorningTurnOn || EveningTurnOn || ButtonPressed ){
+      mState = STATE_TURN_ON;
     }
-    case STATE_TURN_ON:{
+    break;
+  }
+  }   
 
-        // Now that the LED has been turned on, spend a while transmitting ON.
-        Serial.print("Turn on");
-        mySwitch.send(CodeValues[ON_CHANNEL], 24);
-        Serial.println(" complete");
-        mState = STATE_ON;
-        break;
-    }
-    case STATE_ON: {
-
-        bool ButtonPressed = digitalRead(PIN_TOGGLE_BUTTON);
-        if (ButtonPressed) Serial.println("BUTTON");
-      
-        // Turn off at sunrise, the evening turn-off time or on a button press.
-        // There is no checking that the morning or evening start times are before the end times, the
-        //  off signal is always sent. This means the lights will be turned off even if they were turned on
-        //  by the toggle button or a different controller.
-        if ( nowMins == sunriseMins || nowMins == TIME_NIGHT_OFF || ButtonPressed ) {
-            mState = STATE_TURN_OFF;
-        }
-        break;
-    }
-    case STATE_TURN_OFF:{
-
-        // Now that the LED has been turned off, spend a while transmitting OFF.
-        Serial.print("Turn off");
-        mySwitch.send(CodeValues[OFF_CHANNEL], 24);
-        Serial.println(" complete");
-        mState = STATE_OFF;
-        break;
-    }
-    case STATE_OFF: {
-
-        bool ButtonPressed = digitalRead(PIN_TOGGLE_BUTTON);
-        if (ButtonPressed) Serial.println("BUTTON");
-
-        // A morning turn-on is only required if the turn-on time is before sunrise
-        bool MorningTurnOn = (nowMins == TIME_MORNING_ON) && (TIME_MORNING_ON < sunriseMins);
-  
-        // An evening turn-on is only required if the turn-off time is after sunset
-        bool EveningTurnOn = (nowMins == sunsetMins) && (TIME_NIGHT_OFF > sunsetMins);
-        
-        // Turn on at the morning turn-on time, at sunset or on a button press
-        if ( MorningTurnOn || EveningTurnOn || ButtonPressed ){
-            mState = STATE_TURN_ON;
-        }
-        break;
-    }
-    }   
-
-    // The LED is on if the lights are currently on or turning on.
-    digitalWrite(PIN_LED, (mState == STATE_TURN_ON) || (mState == STATE_ON)); 
+  // The LED is on if the lights are currently on or turning on.
+  digitalWrite(PIN_LED, (mState == STATE_TURN_ON) || (mState == STATE_ON)); 
 }
 
 // Returns true if dt is within British Summer Time
@@ -207,13 +219,17 @@ bool IsBST(Ds1302::DateTime dt){
   if ( 3 < dt.month && dt.month < 10 ) return true;
 
   // Work out the day of the last Sunday in the current month, which must be March or October.
-  uint8_t DayOfLastSunday = DaysInMarchAndOctober - 7 + dt.dow + (DaysInMarchAndOctober - dt.day)%7;
+  // 1. Work out the number of days left in the month
+  // 2. Add dow to get the number of days from last Sunday until month end
+  // 3. Mod 7 to get the number of days from the last Sunday in the month until month end
+  // 4. Subtract that from 31 to get the day of the last Sunday.
+  uint8_t DayOfLastSunday = 31 - (31 - dt.day + dt.dow)%7;
 
   // The hour in the month at the start of which daylight savings time starts/ends.
-  uint8_t changeHourInMonth = DayOfLastSunday * 24 + 1;
+  uint16_t changeHourInMonth = DayOfLastSunday * 24 + 1;
 
   // The hour in the month of dt.
-  uint8_t dtHourInMonth = dt.day * 24 + dt.hour;
+  uint16_t dtHourInMonth = dt.day * 24 + dt.hour;
 
   // If the month is March, it's BST if dt is after the change time.
   if (dt.month == 3){
