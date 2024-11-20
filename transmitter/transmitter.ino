@@ -143,10 +143,18 @@ void loop() {
     // Start at the current time.
     uint16_t SimulatedMins = dstMins;
 
-    // Keep decrementing the time until a time at which an event occurs is found.
+    // Keep decrementing the time until a time at which a garden event occurs is found.
     while (!CheckForGardenEvent(SimulatedMins)) {
     
       // Decrement SimulatedMins unless the current time is already zero, in which case reset to 23:59.
+      if (SimulatedMins-- == 0) {
+        SimulatedMins = 23 * 60 + 59;
+      }
+    }
+    
+    // Do the same for the Christmas lights
+    SimulatedMins = dstMins;
+    while (!CheckForChristmasEvent(SimulatedMins)) {
       if (SimulatedMins-- == 0) {
         SimulatedMins = 23 * 60 + 59;
       }
