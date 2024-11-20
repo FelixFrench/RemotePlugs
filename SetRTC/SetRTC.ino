@@ -28,7 +28,7 @@ void setup()
     rtc.init();
 
     Serial.begin(115200);
-    Serial.println("Input the date and time (YYMMDDWhhmmss): ");
+    Serial.println("Input the date and time in UTC (YYMMDDWhhmmss): ");
 }
 
 
@@ -77,7 +77,7 @@ void loop()
         Serial.print(':');
         if (now.second < 10) Serial.print('0');
         Serial.print(now.second);  // 00-59
-        Serial.println();
+        Serial.println(" UTC");
     }
 
     if (Serial.available())

@@ -45,17 +45,12 @@ enum NewCodeValues {
   NEW_CODE_4_OFF = 15404659,
 };
 
-enum TIME {
-  TIME_NIGHT_OFF = 23*60 + 30, // Turn off at midnight after sunset
-  TIME_MORNING_ON = 6*60 + 30, // Turn on at 06:30 before sunrise
-};
-
-
 // Function to work out whether a given UTC datetime is during british summer time.
 bool IsBST(Ds1302::DateTime dt);
 
 // Functions to send any signal that is required at the current date & time.
 bool CheckForGardenEvent(Ds1302::DateTime dt);
+bool CheckForChristmasEvent(Ds1302::DateTime dt);
 void CheckForBedroomEvent(Ds1302::DateTime dt);
 
 // Globals
@@ -136,6 +131,7 @@ void loop() {
     dstMins = 60*((UTC.hour + (isBST ? 1 : 0)) % 24) + UTC.minute;
 
     CheckForGardenEvent(dstMins);
+    CheckForChristmasEvent(dstMins);
     CheckForBedroomEvent(dstDow, dstMins);
   }
 
@@ -148,10 +144,10 @@ void loop() {
     uint16_t SimulatedMins = dstMins;
 
     // Keep decrementing the time until a time at which an event occurs is found.
-    while(!CheckForGardenEvent(SimulatedMins)){
+    while (!CheckForGardenEvent(SimulatedMins)) {
     
       // Decrement SimulatedMins unless the current time is already zero, in which case reset to 23:59.
-      if(SimulatedMins-- == 0){
+      if (SimulatedMins-- == 0) {
         SimulatedMins = 23 * 60 + 59;
       }
     }
@@ -233,14 +229,16 @@ bool IsBST(Ds1302::DateTime dt){
 // This function looks to see if the garden lights need to turn on or off at the current time.
 // If a command is sent then true is returned, otherwise false is returned.
 bool CheckForGardenEvent(uint16_t NowMins) {
-  static const uint16_t MorningOnMins = 6*60 + 30;
-  static const uint16_t NightOffMins = 23*60 + 30;
+  enum {
+    MORNING_ON = 6*60 + 30,
+    NIGHT_OFF = 23*60 + 30
+  };
 
   // If sunrise is after 06:30
-  if (SunriseMins > MorningOnMins) {
+  if (SunriseMins > MORNING_ON) {
 
     // Turn on at 06:30 
-    if (NowMins == MorningOnMins) {
+    if (NowMins == MORNING_ON) {
       Serial.print("Garden morning turn on");
       mySwitch.send(NEW_CODE_2_ON, 24);
       Serial.println(" complete");
@@ -257,7 +255,7 @@ bool CheckForGardenEvent(uint16_t NowMins) {
   }
 
   // If sunset is before 23:30
-  if (SunsetMins < NightOffMins) {
+  if (SunsetMins < NIGHT_OFF) {
 
     // Turn on at sunset
     if (NowMins == SunsetMins) {
@@ -268,7 +266,7 @@ bool CheckForGardenEvent(uint16_t NowMins) {
     }
 
     // Turn off at 23:30
-    if (NowMins == NightOffMins) {
+    if (NowMins == NIGHT_OFF) {
       Serial.print("Garden evening turn off");
       mySwitch.send(NEW_CODE_2_OFF, 24);
       Serial.println(" complete");
@@ -282,44 +280,79 @@ bool CheckForGardenEvent(uint16_t NowMins) {
   return false;
 }
 
+// This function looks to see if the Christmas lights need to turn on or off at the current time.
+// If a command is sent then true is returned, otherwise false is returned.
+bool CheckForChristmasEvent(uint16_t NowMins) {
+  enum {
+    NIGHT_OFF = 22*60,
+  };
+
+  // If sunset is before 23:30
+  if (SunsetMins < NIGHT_OFF) {
+
+    // Turn on at sunset
+    if (NowMins == SunsetMins) {
+      Serial.print("Christmas evening turn on");
+      mySwitch.send(NEW_CODE_4_ON, 24);
+      Serial.println(" complete");
+      return true;
+    }
+
+    // Turn off at 23:30
+    if (NowMins == NIGHT_OFF) {
+      Serial.print("Christmas evening turn off");
+      mySwitch.send(NEW_CODE_4_OFF, 24);
+      Serial.println(" complete");
+      return true;
+    }
+  }
+
+  Serial.print(NowMins);
+  Serial.println(": No Christmas event");
+
+  return false;
+}
+
 // This function looks to see whether the bedroom lights need to turn on at the current time on the curent day of the week.
 void CheckForBedroomEvent(uint8_t dow, uint16_t NowMins) {
 
+  enum {
+    MON_THURS_ON = 6 * 60 + 15,
+    MON_THURS_OFF = 6 * 60 + 40,
+    FRI_ON = 6 * 60 + 15,
+    FRI_OFF = 6 * 60 + 40,
+  };
+
   // On Monday - Thursday
-  if (dow <=4 ) {
+  if (dow <= 4 ) {
     
     // Turn on at 06:15
-    const static uint16_t MonThursOnMins = 6 * 60 + 15;
-    if (NowMins == MonThursOnMins) {
+    if (NowMins == MON_THURS_ON) {
       Serial.print("Bedroom Mon-Thurs turn on");
       mySwitch.send(NEW_CODE_0_ON, 24);
       Serial.println(" complete");
     }
 
     // Turn off at 06:40
-    const static uint16_t MonThursOffMins = 6 * 60 + 40;
-    if (NowMins == MonThursOffMins) {
+    if (NowMins == MON_THURS_OFF) {
       Serial.print("Bedroom Mon-Thurs turn off");
       mySwitch.send(NEW_CODE_0_OFF, 24);
       Serial.println(" complete");
     }
-
   }
 
   // On Friday
   if (dow == 5) {
     
     // Turn on at 07:25
-    const static uint16_t FriOnMins = 7 * 60 + 25;
-    if (NowMins == FriOnMins) {
+    if (NowMins == FRI_ON) {
       Serial.print("Bedroom Friday turn on");
       mySwitch.send(NEW_CODE_0_ON, 24);
       Serial.println(" complete");
     }
 
     // Turn off at 07:50
-    const static uint16_t FriOffMins = 7 * 60 + 50;
-    if (NowMins == FriOffMins) {
+    if (NowMins == FRI_OFF) {
       Serial.print("Bedroom Friday turn off");
       mySwitch.send(NEW_CODE_0_OFF, 24);
       Serial.println(" complete");
