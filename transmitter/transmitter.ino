@@ -49,9 +49,10 @@ enum NewCodeValues {
 bool IsBST(Ds1302::DateTime dt);
 
 // Functions to send any signal that is required at the current date & time.
-bool CheckForGardenEvent(Ds1302::DateTime dt);
-bool CheckForChristmasEvent(Ds1302::DateTime dt);
-void CheckForBedroomEvent(Ds1302::DateTime dt);
+bool CheckForGardenEvent(uint16_t NowMins);
+bool CheckForChristmasEvent(uint16_t NowMins);
+void CheckForBedroomEvent(uint8_t dow, uint16_t NowMins);
+bool CheckForTreeEvent(uint8_t dow, uint16_t NowMins);
 
 // Globals
 RCSwitch mySwitch = RCSwitch();
@@ -133,6 +134,7 @@ void loop() {
     CheckForGardenEvent(dstMins);
     CheckForChristmasEvent(dstMins);
     CheckForBedroomEvent(dstDow, dstMins);
+    CheckForTreeEvent(dstDow, dstMins);
   }
 
   // If no signal has been sent since the last processor reset, then the lights may be in the wrong state. Find the last update event.
@@ -157,6 +159,18 @@ void loop() {
     while (!CheckForChristmasEvent(SimulatedMins)) {
       if (SimulatedMins-- == 0) {
         SimulatedMins = 23 * 60 + 59;
+      }
+    }
+
+    // Do the same for the Tree lights, but also consider the day of week.
+    uint16_t SimulatedDow = dstDow;
+    SimulatedMins = dstMins;
+    while (!CheckForTreeEvent(SimulatedDow, SimulatedMins)) {
+      if (SimulatedMins-- == 0) {
+        SimulatedMins = 23 * 60 + 59;
+        if (SimulatedDow-- == 1) {
+          SimulatedDow = 7;
+        }
       }
     }
 
@@ -295,21 +309,21 @@ bool CheckForChristmasEvent(uint16_t NowMins) {
     NIGHT_OFF = 22*60,
   };
 
-  // If sunset is before 23:30
+  // If sunset is before 22:00
   if (SunsetMins < NIGHT_OFF) {
 
     // Turn on at sunset
     if (NowMins == SunsetMins) {
       Serial.print("Christmas evening turn on");
-      mySwitch.send(NEW_CODE_4_ON, 24);
+      mySwitch.send(NEW_CODE_3_ON, 24);
       Serial.println(" complete");
       return true;
     }
 
-    // Turn off at 23:30
+    // Turn off at 22:00
     if (NowMins == NIGHT_OFF) {
       Serial.print("Christmas evening turn off");
-      mySwitch.send(NEW_CODE_4_OFF, 24);
+      mySwitch.send(NEW_CODE_3_OFF, 24);
       Serial.println(" complete");
       return true;
     }
@@ -369,4 +383,76 @@ void CheckForBedroomEvent(uint8_t dow, uint16_t NowMins) {
 
   Serial.print(NowMins);
   Serial.println(": No bedroom event");
+}
+
+// This function looks to see whether the tree lights need to turn on at the current time on the curent day of the week.
+bool CheckForTreeEvent(uint8_t dow, uint16_t NowMins){
+    enum {
+    WEEKDAY_MORNING_ON = 6 * 60 + 30,
+    WEEKDAY_MORNING_OFF = 7 * 60 + 15,
+
+    MON_THURS_AFTERNOON_ON = 17 * 60 + 30,
+    FRI_AFTERNOON_ON = 13 * 60 + 15,
+    WEEKEND_ON = 8 * 60 + 15,
+
+    EVENING_OFF = 23 * 60,
+  };
+
+  bool SignalSent = false;
+  
+  // Weekdays
+  if(dow <= 5){
+
+    // Weekday morning on
+    if (NowMins == WEEKDAY_MORNING_ON) {
+      mySwitch.send(NEW_CODE_4_ON, 24);
+      SignalSent = true;
+    }
+      
+    // Weekday morning off
+    if (NowMins == WEEKDAY_MORNING_OFF) {
+      mySwitch.send(NEW_CODE_4_OFF, 24);
+      SignalSent = true;
+    }
+
+    // Friday afternoon on
+    if (dow == 5){
+      if (NowMins == FRI_AFTERNOON_ON) {
+        mySwitch.send(NEW_CODE_4_ON, 24);
+        SignalSent = true;
+      }
+        
+    // Mon-thurs afternoon on
+    } else {
+      if (NowMins == MON_THURS_AFTERNOON_ON) {
+        mySwitch.send(NEW_CODE_4_ON, 24);
+        SignalSent = true;
+      }
+    }
+
+  // Weekend
+  } else {
+
+      // Weekend on
+      if (NowMins == WEEKEND_ON) {
+        mySwitch.send(NEW_CODE_4_ON, 24);
+        SignalSent = true;
+      }
+  }
+
+  // Evening on
+  if (NowMins == EVENING_OFF) {
+    mySwitch.send(NEW_CODE_4_OFF, 24);
+    SignalSent = true;
+  }
+
+  Serial.print(NowMins);
+  if(SignalSent){
+    Serial.println(": Tree event complete");
+  } else {
+    Serial.println(": No tree event");
+  }
+  
+
+  return SignalSent;
 }

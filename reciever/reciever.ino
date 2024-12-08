@@ -21,6 +21,8 @@ const char* CommandStrings[] = {"on", "off", "both", "unknown"};
 
 void setup() {
   Serial.begin(115200);
+
+  Serial.print("Receiver ready");
   
   mySwitch.enableReceive(0);  // Receiver on interrupt 0 => that is pin #2
 }
