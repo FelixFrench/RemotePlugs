@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+HomeLightsControl/src/NetCreds.h
+/ESPTimeTest
+/ESP32transmitter
+/ESP32transmitterSimple
+/HomeLightsControl/.vscode
+/HomeLightsControl/.pio
