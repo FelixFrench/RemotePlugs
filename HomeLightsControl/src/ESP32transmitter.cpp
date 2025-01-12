@@ -1,23 +1,15 @@
 #include <Arduino.h>
 
 #include "WiFi.h"
-#include "time.h"
-#include "CRemoteCodes.hpp"
 #include "CTransmitter.hpp"
 #include "CWebServer.hpp"
+#include "CTimedActions.hpp"
 #include "NetCreds.h"
 
 enum PIN {
   PIN_LED = 2,
 };
 
-
-const char* ntpServer = "pool.ntp.org";
-// TimeZone rule for Europe/London including daylight adjustment rules.
-// From https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
-const char* time_zone = "GMT0BST,M3.5.0/1,M10.5.0";
-
-struct tm timeinfo;
 
 void setup() {
 
@@ -30,10 +22,8 @@ void setup() {
   Serial.begin(115200);
 
   // Connect to Wi-Fi
-  Serial.print("Connecting to ");
-  Serial.println(NetCreds::ssid);
-  
-  WiFi.begin(NetCreds::ssid, NetCreds::password);
+  Serial.print("Connecting WiFi ");  
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -41,38 +31,26 @@ void setup() {
   Serial.println("");
 
   // Print own IP address
-  Serial.println("Connection complete. IP address: ");
   Serial.println(WiFi.localIP());
 
   // Start web server
   CWebServer::Setup();
 
-  configTzTime(time_zone, ntpServer);
-
-  Serial.println("Getting time");
-  while(!getLocalTime(&timeinfo));
-  Serial.println("  complete");
+  // Get the time
+  CTimedActions::Setup();
 
   digitalWrite(PIN_LED, LOW);
 }
 
 void loop() {
 
-  // If a request to transmit was received through the website, set the code to transmit and the number of repeats
-  CRemoteCodes WebpageCode = CWebServer::Background();
-  if (WebpageCode != CRemoteCodes::NONE){
-    CTransmitter::StartTransmitting(WebpageCode);
-  }
-  
-  // Get the time, and do some stuff once per second
-  getLocalTime(&timeinfo);
-  uint8_t nowSeconds = timeinfo.tm_sec;
-  static uint8_t lastSeconds = 0;
-  if(nowSeconds != lastSeconds){
-    lastSeconds = nowSeconds;
-    Serial.println(&timeinfo, "%a, %d %b %Y %H:%M:%S");
-  }
+  // Check if any transmissions have been requested from the webpage. Any which have will be added to the queue.
+  CWebServer::Background();
 
+  // Check if transmissions need to be sent at the current time. Any which do will be added to the queue.
+  CTimedActions::Run();
+
+  // Run the transmitter backround task. This will return true if it sent a transmission.
   if (CTransmitter::Background())
     digitalWrite(PIN_LED, HIGH);
   else

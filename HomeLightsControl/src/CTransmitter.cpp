@@ -2,9 +2,6 @@
 
 // Initialise static member variables
 RCSwitch CTransmitter::mySwitch = RCSwitch();
-CRemoteCodes CTransmitter::codeToSend = CRemoteCodes::NONE;
-uint16_t CTransmitter::repeatsRemaining = 0;
-
 
 void CTransmitter::Setup(void){
 
@@ -19,18 +16,18 @@ bool CTransmitter::Background(void){
     // This will be set if a transmission is made
     bool didATransmit = false;
 
+    // Get the next code that needs sending from the queue.
+    CRemoteCodes CodeToSend = CTransmitQueue::Pop();
+
     // Transmit a code if required
-    if (repeatsRemaining > 0) {
-        mySwitch.send(static_cast<uint32_t>(codeToSend), 24);
-        repeatsRemaining--;
+    if (CodeToSend != CRemoteCodes::NONE){
+        mySwitch.send(static_cast<uint32_t>(CodeToSend), 24);
         didATransmit = true;
     }
 
     return didATransmit;
 }
 
-void CTransmitter::StartTransmitting(CRemoteCodes code){
-    
-    codeToSend = code;
-    repeatsRemaining = NUM_REPEATS;
+void CTransmitter::EnqueueTransmission(CRemoteCodes code){
+    CTransmitQueue::Push(code);
 }

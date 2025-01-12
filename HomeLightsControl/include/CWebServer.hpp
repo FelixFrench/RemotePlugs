@@ -3,8 +3,6 @@
 
 #include "stdlib.h"
 #include "WiFi.h"
-#include "CRemoteCodes.hpp"
-
 
 class CWebServer {
 
@@ -16,7 +14,7 @@ static void Setup(void){
 }
 
 // Send a transmission if required. Returns true if a transmission was made.
-static CRemoteCodes Background(void);
+static void Background(void);
 
 private:
 // Set web server port number to 80

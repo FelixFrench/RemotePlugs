@@ -36,3 +36,4 @@ HomeLightsControl/src/NetCreds.h
 /ESP32transmitterSimple
 /HomeLightsControl/.vscode
 /HomeLightsControl/.pio
+HomeLightsControl/include/NetCreds.h

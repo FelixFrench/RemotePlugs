@@ -4,6 +4,7 @@
 #include "stdlib.h"
 #include <RCSwitch.h>
 #include "CRemoteCodes.hpp"
+#include "CTransmitQueue.hpp"
 
 
 class CTransmitter {
@@ -17,25 +18,16 @@ static void Setup(void);
 static bool Background(void);
 
 // Set up a transmission to be sent in the next NUM_REPEATS calls of Background
-static void StartTransmitting(CRemoteCodes code);
+static void EnqueueTransmission(CRemoteCodes code);
 
 private:
 enum{
-  // The number of times to transmit any code.
-  NUM_REPEATS = 100,
-
   // The pin which the transmitter is connected to
   PIN_TRANSMIT = 12
 };
 
 // The transmitter
 static RCSwitch mySwitch;
-
-// The code which is currently being transitted, or was last transmitted.
-static CRemoteCodes codeToSend;
-
-// The number more times to transit codeToSend.
-static uint16_t repeatsRemaining;
 
 };
 #endif
