@@ -6,7 +6,8 @@
 class CTimedActions {
 
 public:
-// Set up connection to the ntp server and transmit the last signal for each timer
+// Set up connection to the ntp server and do any backscanning
+// Backscanning is looking for the last code that would have been sent - useful after a power outage when all plugs turn off.
 static void Setup();
 
 // Add any required actions for the current time to the transmit queue

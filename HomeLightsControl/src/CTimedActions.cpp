@@ -92,7 +92,7 @@ void CTimedActions::Run()
     lastMinute = nowMinute;
 
     BedroomLights(timeinfo);
-    //GardenLights(timeinfo);
+    GardenLights(timeinfo);
 
 
     // Day actions
@@ -186,6 +186,8 @@ bool CTimedActions::GardenLights(tm currentTime)
             Serial.println("Garden lights night off");
         }
     }
+
+    if (!ActionRequired) Serial.printf("No garden lights action at %d mins \n", currentMins);
 
     return ActionRequired;
 }

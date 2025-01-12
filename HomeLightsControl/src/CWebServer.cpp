@@ -67,8 +67,8 @@ const char CWebServer::HTML[] =     "<!DOCTYPE html><html><head>"
                                     "</table></body></html>";
 
 
-void CWebServer::Background(){
-
+void CWebServer::Background()
+{
   // Get any client that is connected and has data available for reading
   WiFiClient client = server.available();
 
@@ -79,7 +79,7 @@ void CWebServer::Background(){
   // A client is available, record when it connected
   connectionStartTime = millis();
 
-  Serial.println("Conn");
+  Serial.println("Webserver client connected");
 
   // This will be cleared once something other than a \n or \r is received.
   bool currentLineIsEmpty = true;
@@ -101,9 +101,9 @@ void CWebServer::Background(){
       // If other bytes have been recieved on this line, just start a new line
       if (!currentLineIsEmpty) {
         currentLineIsEmpty = true;
-
+      }
       // If \n was the first character on this line, then the client HTTP request is complete, so respond.
-      } else {
+      else {
 
         // Send the response header
         client.println(ResponseHeader);
@@ -127,28 +127,28 @@ void CWebServer::Background(){
           CTransmitQueue::Push(CRemoteCodes::NEW_2_OFF);
           CTransmitQueue::Push(CRemoteCodes::NEW_3_OFF);
           CTransmitQueue::Push(CRemoteCodes::NEW_4_OFF);
-
-        } else if (header.indexOf("GET /0_on") >= 0) {
+        }
+        else if (header.indexOf("GET /0_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_0_ON);
         } else if (header.indexOf("GET /0_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_0_OFF);
-
-        } else if (header.indexOf("GET /1_on") >= 0) {
+        }
+        else if (header.indexOf("GET /1_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_1_ON);
         } else if (header.indexOf("GET /1_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_1_OFF);
-
-        } else if (header.indexOf("GET /2_on") >= 0) {
+        }
+        else if (header.indexOf("GET /2_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_2_ON);
         } else if (header.indexOf("GET /2_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_2_OFF);
-
-        } else if (header.indexOf("GET /3_on") >= 0) {
+        }
+        else if (header.indexOf("GET /3_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_3_ON);
         } else if (header.indexOf("GET /3_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_3_OFF);
-
-        } else if (header.indexOf("GET /4_on") >= 0) {
+        }
+        else if (header.indexOf("GET /4_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_4_ON);
         } else if (header.indexOf("GET /4_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_4_OFF);
@@ -157,19 +157,17 @@ void CWebServer::Background(){
         // Break out of the while loop
         break;
       }
-
+    }
     // If anything other than a carriage return character was recieved, the current line is now not empty.
-    } else if (c != '\r') {
+    else if (c != '\r') {
       currentLineIsEmpty = false;
     }
   }
-
-  //Serial.println(header);
 
   // Clear the header variable
   header = "";
 
   // Close the connection
   client.stop();
-  Serial.println("Disconn");
+  Serial.println("Client disconnected");
 }

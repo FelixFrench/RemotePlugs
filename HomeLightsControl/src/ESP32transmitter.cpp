@@ -11,8 +11,8 @@ enum PIN {
 };
 
 
-void setup() {
-
+void setup()
+{
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, HIGH);
 
@@ -42,8 +42,8 @@ void setup() {
   digitalWrite(PIN_LED, LOW);
 }
 
-void loop() {
-
+void loop()
+{
   // Check if any transmissions have been requested from the webpage. Any which have will be added to the queue.
   CWebServer::Background();
 

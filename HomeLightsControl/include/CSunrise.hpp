@@ -1,3 +1,5 @@
+// Use api.sunrise-sunset.org to get the sunrise and sunset times
+
 #ifndef C_SUNRISE_HPP
 #define C_SUNRISE_HPP
 
@@ -21,10 +23,10 @@ static uint16_t GetSunset(void){
 
 private:
 
-// sunrise-sunset.org API request.
+// api.sunrise-sunset.org request.
 const static char* mSunriseAPI;
 
-// The times of sunrise and sunset in minutes since midnight.
+// The times of sunrise and sunset in minutes since midnight as retrieved during the last call of Update().
 static uint16_t mSunriseMins, mSunsetMins;
 };
 

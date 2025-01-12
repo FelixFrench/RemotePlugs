@@ -3,7 +3,10 @@
 
 // The codes transmitted by the remote.
 enum class CRemoteCodes {
+
+  // Helper code
   NONE = 0,
+  
   NEW_0_ON  = 15404668,
   NEW_0_OFF = 15404660,
   NEW_1_ON  = 15404666,

@@ -2,7 +2,6 @@
 #define C_TRANSMITTER_HPP
 
 #include "stdlib.h"
-#include <RCSwitch.h>
 #include "CRemoteCodes.hpp"
 #include "CTransmitQueue.hpp"
 
@@ -21,13 +20,23 @@ static bool Background(void);
 static void EnqueueTransmission(CRemoteCodes code);
 
 private:
-enum{
-  // The pin which the transmitter is connected to
-  PIN_TRANSMIT = 12
+enum {
+    PIN_TRANSMIT = 12,
+    PULSE_LENGTH = 150,
+
+    ZERO_HIGH = 1,
+    ZERO_LOW = 3,
+    ONE_HIGH = 3,
+    ONE_LOW = 1,
+    SYNC_HIGH = 1,
+    SYNC_LOW = 31
 };
 
-// The transmitter
-static RCSwitch mySwitch;
+// Send a given code. Length gives the number of bits the code uses. Code should be right-justified.
+static void Send(CRemoteCodes code, int16_t length);
+
+// Transmit a high-low pulse. High and Low determine the on and off times in units of PULSE_LENGTH * microsecond.
+static void Transmit(uint16_t High, uint16_t Low);
 
 };
 #endif
