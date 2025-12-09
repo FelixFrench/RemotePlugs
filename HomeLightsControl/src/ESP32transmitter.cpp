@@ -36,9 +36,6 @@ void setup()
   // Start web server
   CWebServer::Setup();
 
-  // Get the time
-  CTimedActions::Setup();
-
   digitalWrite(PIN_LED, LOW);
 }
 

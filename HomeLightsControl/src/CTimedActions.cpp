@@ -1,4 +1,5 @@
 #include "WiFi.h"
+#include <esp_sntp.h>
 #include "CTimedActions.hpp"
 #include "CTransmitQueue.hpp"
 #include "CRemoteCodes.hpp"
@@ -10,50 +11,31 @@ const char* CTimedActions::mNTP_Server = "pool.ntp.org";
 // TimeZone rule for Europe/London including daylight adjustment rules.
 // From https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
 const char* CTimedActions::mTimeZone = "GMT0BST,M3.5.0/1,M10.5.0";
+// State variable
+CTimedActions::STATE CTimedActions::mState;
 
-void CTimedActions::getLocalEpochTime(time_t* pNow)
-{   
-    // TODO: Use <esp_sntp.h>
-    //       sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED
-
-    struct tm info;
-    
-    while (true) {
-
-        // Store the current time
-        time(pNow);
-
-        // Convert pNow to a struct tm in local time
-        localtime_r(pNow, &info);
-
-        // Only return once NTP has synced with the current time
-        if (info.tm_year > (2016 - 1900))
-            return;
-        
-        // ESP32 delay
-        delay(10);
-    }
-}
-
-void CTimedActions::Setup()
+bool CTimedActions::Setup()
 {
-    // Get the time
-    configTzTime(mTimeZone, mNTP_Server);
-    time_t simulatedEpochTime = 0;
-    getLocalEpochTime(&simulatedEpochTime);
+    // Return false until NTP has been acquired
+    if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED){
+        Serial.println("Waiting for NTP");
+        return false;
+    }
 
-    Serial.println("Got the time");
+    time_t simulatedEpochTime = 0;
+    time(&simulatedEpochTime);
+    tm simulatedStructTime;
+    localtime_r(&simulatedEpochTime, &simulatedStructTime);
+    Serial.printf("NTP acquired: The time is %u mins since midnight\r\n", minsSinceMidnight(simulatedStructTime));
 
     // Update the sunrise and sunset times
     CSunrise::Update();
 
     // Transmit the last required code for each switch
-    // This means that at turn-on or after a power cut, all plugs will automatically
-    //  be returned to the correct state
+    // This means that at turn-on or after a power cut, all plugs will automatically be returned to the correct state
     bool gardenLightsDone = false;
     bool christmasLightsDone = false;
     bool christmasTreeDone = false;
-    tm simulatedStructTime;
 
     while (true){
 
@@ -78,10 +60,26 @@ void CTimedActions::Setup()
 
     Serial.println("Backscanning complete");
 
+    // Setup complete - return true.
+    return true;
 }
 
 void CTimedActions::Run()
 {   
+    // Before doing timed actions, NTP must be acquired and backscanning done.
+    if (mState == STATE_INITIAL){
+        // Set the timezone and NTP server to use then always go to the next state
+        configTzTime(mTimeZone, mNTP_Server);
+        mState = STATE_SETUP;
+    }
+    if (mState == STATE_SETUP){
+        // Go to active state once setup complete
+        if (Setup())
+            mState = STATE_ACTIVE;
+        else
+            return;
+    }
+
     tm timeinfo;
     // Get the time
     getLocalTime(&timeinfo);
@@ -162,7 +160,7 @@ bool CTimedActions::BedroomLights(tm currentTime)
         actionRequired = true;
     }
 
-    if (!actionRequired) Serial.printf("No bedroom lights action at %d mins \n", currentMins);
+    if (!actionRequired) Serial.printf("No bedroom lights action at %u mins \r\n", currentMins);
 
     return actionRequired;
 }
@@ -221,7 +219,7 @@ bool CTimedActions::GardenLights(tm currentTime)
         }
     }
 
-    if (!actionRequired) Serial.printf("No garden lights action at %d mins \n", currentMins);
+    if (!actionRequired) Serial.printf("No garden lights action at %u mins \r\n", currentMins);
 
     return actionRequired;
 }
@@ -259,7 +257,7 @@ bool CTimedActions::ChristmasLights(tm currentTime)
         }
     }
 
-    if (!actionRequired) Serial.printf("No Christmas lights action at %d mins \n", currentMins);
+    if (!actionRequired) Serial.printf("No Christmas lights action at %u mins \r\n", currentMins);
 
     return actionRequired;
 }
@@ -325,7 +323,7 @@ bool CTimedActions::ChristmasTree(tm currentTime)
         }
     }
 
-    if (!actionRequired) Serial.printf("No Christmas tree action at %d mins \n", currentMins);
+    if (!actionRequired) Serial.printf("No Christmas tree action at %u mins \r\n", currentMins);
 
     return actionRequired;
 }
