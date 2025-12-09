@@ -31,7 +31,7 @@ void CSunrise::Update(void)
         mSunriseMins = (sunrise[11] - '0') * 600 + (sunrise[12] - '0') * 60 + (sunrise[14] - '0') * 10 + (sunrise[15] - '0');
         mSunsetMins = (sunset[11] - '0') * 600 + (sunset[12] - '0') * 60 + (sunset[14] - '0') * 10 + (sunset[15] - '0');
 
-        Serial.printf("New sunrise/sunset times: %d, %d\n", mSunriseMins, mSunsetMins);
+        Serial.printf("New sunrise/sunset times: %d, %d\r\n", mSunriseMins, mSunsetMins);
     }
     else {
         Serial.printf("Could not updare sunrise and sunset times. Error code: %d\n", respCode);
