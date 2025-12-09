@@ -1,4 +1,5 @@
 #include "WiFi.h"
+#include <esp_sntp.h>
 #include "CTimedActions.hpp"
 #include "CTransmitQueue.hpp"
 #include "CRemoteCodes.hpp"
@@ -10,57 +11,75 @@ const char* CTimedActions::mNTP_Server = "pool.ntp.org";
 // TimeZone rule for Europe/London including daylight adjustment rules.
 // From https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
 const char* CTimedActions::mTimeZone = "GMT0BST,M3.5.0/1,M10.5.0";
+// State variable
+CTimedActions::STATE CTimedActions::mState;
 
-void CTimedActions::getLocalEpochTime(time_t* pNow)
-{   
-    struct tm info;
-    
-    while (true) {
-        time(pNow);
-        localtime_r(pNow, &info);
-        if (info.tm_year > (2016 - 1900))
-            return;
-
-        delay(10);
-    }
-}
-
-void CTimedActions::Setup()
+bool CTimedActions::Setup()
 {
-    // Get the time
-    configTzTime(mTimeZone, mNTP_Server);
-    time_t simulatedEpochTime = 0;
-    getLocalEpochTime(&simulatedEpochTime);
+    // Return false until NTP has been acquired
+    if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED){
+        Serial.println("Waiting for NTP");
+        return false;
+    }
 
-    Serial.println("Got the time");
+    time_t simulatedEpochTime = 0;
+    time(&simulatedEpochTime);
+    tm simulatedStructTime;
+    localtime_r(&simulatedEpochTime, &simulatedStructTime);
+    Serial.printf("NTP acquired: The time is %u mins since midnight\r\n", minsSinceMidnight(simulatedStructTime));
 
     // Update the sunrise and sunset times
     CSunrise::Update();
 
-    // Transmit the last required garden code
-    bool transmissionComplete = false;
-    tm simulatedStructTime;
+    // Transmit the last required code for each switch
+    // This means that at turn-on or after a power cut, all plugs will automatically be returned to the correct state
+    bool gardenLightsDone = false;
+    bool christmasLightsDone = false;
+    bool christmasTreeDone = false;
 
-    while (!transmissionComplete){
+    while (true){
 
         // Convert the epoch time (time_t) to a tm struct
         localtime_r(&simulatedEpochTime, &simulatedStructTime);
 
-        // If a transmission to send has been found, break.
-        if (GardenLights(simulatedStructTime))
-            transmissionComplete = true;
+        // Try each switch which hasn't yet found its last transmission
+        if (!gardenLightsDone)
+            gardenLightsDone = GardenLights(simulatedStructTime);
+        if (!christmasLightsDone)
+            christmasLightsDone = ChristmasLights(simulatedStructTime);
+        if (!christmasTreeDone)
+            christmasTreeDone = ChristmasTree(simulatedStructTime);
 
-        // Otherwise, if the last transmission hasn't been found yet, go back a minute.
-        else
-            simulatedEpochTime -= 60;
+        // If all switches have now had their last transmission sent, break
+        if (gardenLightsDone && christmasLightsDone && christmasTreeDone)
+            break;
+
+        // Otherwise, there are more transmissions to be found and sent, so move the simulated time back a minute.
+        simulatedEpochTime -= 60;
     }
 
     Serial.println("Backscanning complete");
 
+    // Setup complete - return true.
+    return true;
 }
 
 void CTimedActions::Run()
 {   
+    // Before doing timed actions, NTP must be acquired and backscanning done.
+    if (mState == STATE_INITIAL){
+        // Set the timezone and NTP server to use then always go to the next state
+        configTzTime(mTimeZone, mNTP_Server);
+        mState = STATE_SETUP;
+    }
+    if (mState == STATE_SETUP){
+        // Go to active state once setup complete
+        if (Setup())
+            mState = STATE_ACTIVE;
+        else
+            return;
+    }
+
     tm timeinfo;
     // Get the time
     getLocalTime(&timeinfo);
@@ -93,6 +112,8 @@ void CTimedActions::Run()
 
     BedroomLights(timeinfo);
     GardenLights(timeinfo);
+    ChristmasLights(timeinfo);
+    ChristmasTree(timeinfo);
 
 
     // Day actions
@@ -110,48 +131,59 @@ void CTimedActions::Run()
     CSunrise::Update();
 }
 
-void CTimedActions::BedroomLights(tm currentTime)
+bool CTimedActions::BedroomLights(tm currentTime)
 {
-    // The bedroom lights turn on at 06:15 and off at 06:40 on weekdays only
+    // The bedroom lights turn on at 06:55 and off at 07:35 on weekdays only
 
     // Times in minutes from midnight
     enum {
-        ON_MINS = 375,
-        OFF_MINS = 400
+        ON_MINS = 415,
+        OFF_MINS = 455
     };
 
     // If it is the weekend, no action is required.
-    if (currentTime.tm_wday == 0 || currentTime.tm_wday == 6)
-        return;
+    if (isWeekend(currentTime))
+        return false;
 
-    uint16_t currentMins = currentTime.tm_hour * 60 + currentTime.tm_min;
+    // If any action is required during the current minute, this will be set to true.
+    bool actionRequired = false;
 
-    if(currentMins == ON_MINS)
+    uint16_t currentMins = minsSinceMidnight(currentTime);
+
+    if(currentMins == ON_MINS){
         CTransmitQueue::Push(CRemoteCodes::NEW_0_ON);
+        actionRequired = true;
+    }
 
-    if (currentMins == OFF_MINS)
+    else if (currentMins == OFF_MINS){
         CTransmitQueue::Push(CRemoteCodes::NEW_0_OFF);
+        actionRequired = true;
+    }
+
+    if (!actionRequired) Serial.printf("No bedroom lights action at %u mins \r\n", currentMins);
+
+    return actionRequired;
 }
 
 bool CTimedActions::GardenLights(tm currentTime)
 {
-    // If sunrise is after 07:00 then
-    //   the garden lights turn on at 07:00 and off at sunrise
+    // If sunrise is after 07:20 then
+    //   the garden lights turn on at 07:20 and off at sunrise
     // If sunset is before 23:30 then
     //   the garden lights turn on at sunset and off at 23:30
 
     // Times in minutes from midnight
     enum {
-        MORNING_ON_MINS = 420,
+        MORNING_ON_MINS = 440,
         NIGHT_OFF_MINS = 1410
     };
 
     // If any action is required during the current minute, this will be set to true.
-    bool ActionRequired = false;
+    bool actionRequired = false;
 
     uint16_t SunriseMins = CSunrise::GetSunrise();
     uint16_t SunsetMins = CSunrise::GetSunset();
-    int16_t currentMins = currentTime.tm_hour * 60 + currentTime.tm_min;
+    uint16_t currentMins = minsSinceMidnight(currentTime);
 
     // If sunrise is after the morning on time
     if (MORNING_ON_MINS < SunriseMins) {
@@ -160,12 +192,12 @@ bool CTimedActions::GardenLights(tm currentTime)
         if (currentMins == MORNING_ON_MINS) {
             CTransmitQueue::Push(CRemoteCodes::NEW_2_ON);
             Serial.println("Garden lights morning on");
-            ActionRequired = true;
+            actionRequired = true;
         }
         // Turn off at sunrise
         else if (currentMins == SunriseMins) {
             CTransmitQueue::Push(CRemoteCodes::NEW_2_OFF);
-            ActionRequired = true;
+            actionRequired = true;
             Serial.println("Garden lights sunrise off");
         }
     }
@@ -176,18 +208,122 @@ bool CTimedActions::GardenLights(tm currentTime)
         // Turn on at sunset
         if (currentMins == SunsetMins) {
             CTransmitQueue::Push(CRemoteCodes::NEW_2_ON);
-            ActionRequired = true;
+            actionRequired = true;
             Serial.println("Garden lights sunset on");
         }
         // Turn off at the scheduled time
         else if (currentMins == NIGHT_OFF_MINS) {
             CTransmitQueue::Push(CRemoteCodes::NEW_2_OFF);
-            ActionRequired = true;
+            actionRequired = true;
             Serial.println("Garden lights night off");
         }
     }
 
-    if (!ActionRequired) Serial.printf("No garden lights action at %d mins \n", currentMins);
+    if (!actionRequired) Serial.printf("No garden lights action at %u mins \r\n", currentMins);
 
-    return ActionRequired;
+    return actionRequired;
+}
+
+bool CTimedActions::ChristmasLights(tm currentTime)
+{
+    // If sunset is before 23:30 then
+    //   the garden lights turn on at sunset and off at 23:30
+
+    // Times in minutes from midnight
+    enum {
+        NIGHT_OFF_MINS = 1410
+    };
+
+    // If any action is required during the current minute, this will be set to true.
+    bool actionRequired = false;
+
+    uint16_t SunsetMins = CSunrise::GetSunset();
+    uint16_t currentMins = minsSinceMidnight(currentTime);
+
+    // If sunset is before the night off time
+    if (SunsetMins < NIGHT_OFF_MINS) {
+
+        // Turn on at sunset
+        if (currentMins == SunsetMins) {
+            CTransmitQueue::Push(CRemoteCodes::NEW_3_ON);
+            actionRequired = true;
+            Serial.println("Christmas lights sunset on");
+        }
+        // Turn off at the scheduled time
+        else if (currentMins == NIGHT_OFF_MINS) {
+            CTransmitQueue::Push(CRemoteCodes::NEW_3_OFF);
+            actionRequired = true;
+            Serial.println("Christmas lights night off");
+        }
+    }
+
+    if (!actionRequired) Serial.printf("No Christmas lights action at %u mins \r\n", currentMins);
+
+    return actionRequired;
+}
+
+bool CTimedActions::ChristmasTree(tm currentTime)
+{
+    //  if weekend
+    //      turn on at 07:20
+    //      turn off at 23:30
+    //  else
+    //      turn on at 07:20
+    //      turn off at max(08:30, sunrise)
+    //      turn on at min(17:00, sunset)
+    //      turn off at 23:30
+
+    // Times in minutes from midnight
+    enum {
+        MORNING_ON_MINS = 440,
+        WEEKDAY_MORNING_OFF_MINS = 510,
+        WEEKDAY_EVENING_ON_MINS = 1020,
+        NIGHT_OFF_MINS = 1410
+    };
+
+    // If any action is required during the current minute, this will be set to true.
+    bool actionRequired = false;
+
+    uint16_t currentMins = minsSinceMidnight(currentTime);
+
+    // Turn on at the scheduled time
+    if (currentMins == MORNING_ON_MINS) {
+        CTransmitQueue::Push(CRemoteCodes::NEW_4_ON);
+        Serial.println("Christmas tree morning on");
+        actionRequired = true;
+    }
+
+    // Turn off at the scheduled time
+    else if (currentMins == NIGHT_OFF_MINS) {
+        CTransmitQueue::Push(CRemoteCodes::NEW_4_OFF);
+        actionRequired = true;
+        Serial.println("Garden lights night off");
+    }
+
+    // If today is a weekday
+    else if (!isWeekend(currentTime)){
+        
+        // On weekdays, turn off at the later of sunrise or the set time
+        uint16_t sunriseMins = CSunrise::GetSunrise();
+        uint16_t morningOffMins = WEEKDAY_MORNING_OFF_MINS > sunriseMins ? WEEKDAY_MORNING_OFF_MINS : sunriseMins;
+
+        // On weekdays, turn on at the later of sunset or the set time
+        uint16_t sunsetMins = CSunrise::GetSunset();
+        uint16_t eveningOnMins = WEEKDAY_EVENING_ON_MINS < sunsetMins ? WEEKDAY_EVENING_ON_MINS : sunsetMins;
+
+        if (currentMins == morningOffMins) {
+            CTransmitQueue::Push(CRemoteCodes::NEW_4_OFF);
+            actionRequired = true;
+            Serial.println("Christmas tree weekday morning off");
+        }
+        else if (currentMins == eveningOnMins) {
+            CTransmitQueue::Push(CRemoteCodes::NEW_4_ON);
+            actionRequired = true;
+            Serial.println("Christmas tree weekday morning on");
+        }
+    }
+
+    if (!actionRequired) Serial.printf("No Christmas tree action at %u mins \r\n", currentMins);
+
+    return actionRequired;
 }
