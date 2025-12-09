@@ -19,8 +19,11 @@ private:
         // Set NTP settings
         STATE_INITIAL,
 
-        // Waiting to update NTP and do backscanning
-        STATE_SETUP,
+        // Waiting for NTP update
+        STATE_ACQUIRE_NTP,
+
+        // Finding last transmission to send to each switch
+        STATE_BACKSCAN,
 
         // Normal operation doing timed actions
         STATE_ACTIVE,
@@ -47,7 +50,9 @@ private:
     // Set up connection to the ntp server and do any backscanning
     // Backscanning is looking for the last code that would have been sent - useful after a power outage when all plugs turn off.
     // Returns true once NTP acquired and backscanning complete
-    static bool Setup();
+    static bool AcquireNTP();
+
+    static bool Backscan();
 
     // Adds any bedroom lights action required at the current time to the queue. Returns true if an action was required
     static bool BedroomLights(tm currentTime);

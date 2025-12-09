@@ -14,7 +14,7 @@ const char* CTimedActions::mTimeZone = "GMT0BST,M3.5.0/1,M10.5.0";
 // State variable
 CTimedActions::STATE CTimedActions::mState;
 
-bool CTimedActions::Setup()
+bool CTimedActions::AcquireNTP()
 {
     // Return false until NTP has been acquired
     if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED){
@@ -31,37 +31,53 @@ bool CTimedActions::Setup()
     // Update the sunrise and sunset times
     CSunrise::Update();
 
-    // Transmit the last required code for each switch
-    // This means that at turn-on or after a power cut, all plugs will automatically be returned to the correct state
-    bool gardenLightsDone = false;
-    bool christmasLightsDone = false;
-    bool christmasTreeDone = false;
-
-    while (true){
-
-        // Convert the epoch time (time_t) to a tm struct
-        localtime_r(&simulatedEpochTime, &simulatedStructTime);
-
-        // Try each switch which hasn't yet found its last transmission
-        if (!gardenLightsDone)
-            gardenLightsDone = GardenLights(simulatedStructTime);
-        if (!christmasLightsDone)
-            christmasLightsDone = ChristmasLights(simulatedStructTime);
-        if (!christmasTreeDone)
-            christmasTreeDone = ChristmasTree(simulatedStructTime);
-
-        // If all switches have now had their last transmission sent, break
-        if (gardenLightsDone && christmasLightsDone && christmasTreeDone)
-            break;
-
-        // Otherwise, there are more transmissions to be found and sent, so move the simulated time back a minute.
-        simulatedEpochTime -= 60;
-    }
-
-    Serial.println("Backscanning complete");
-
     // Setup complete - return true.
     return true;
+}
+
+bool CTimedActions::Backscan()
+{
+    // Transmit the last required code for each switch
+    // This means that at turn-on or after a power cut, all plugs will automatically be returned to the correct state
+
+    static time_t simulatedEpochTime;
+    static bool gardenLightsDone;
+    static bool christmasLightsDone;
+    static bool christmasTreeDone;
+    static bool complete = true;
+    tm simulatedStructTime;
+
+    // If this is the first run, or first run since the last backscan completed, reset state variables and reload the simulated
+    //  time.
+    if (complete){
+        time(&simulatedEpochTime);
+        gardenLightsDone = false;
+        christmasLightsDone = false;
+        christmasTreeDone = false;
+        complete = false;
+    }
+
+    // Convert the epoch time (time_t) to a tm struct
+    localtime_r(&simulatedEpochTime, &simulatedStructTime);
+
+    // Try each switch which hasn't yet found its last transmission
+    if (!gardenLightsDone)
+        gardenLightsDone = GardenLights(simulatedStructTime);
+    if (!christmasLightsDone)
+        christmasLightsDone = ChristmasLights(simulatedStructTime);
+    if (!christmasTreeDone)
+        christmasTreeDone = ChristmasTree(simulatedStructTime);
+
+    // If all switches have now had their last transmission sent, the backscanning is complete
+    complete = gardenLightsDone && christmasLightsDone && christmasTreeDone;
+
+    if (complete)
+        Serial.println("Backscanning complete");
+    else
+        // Reduce the simulated epoch time
+        simulatedEpochTime -= 60;
+
+    return complete;
 }
 
 void CTimedActions::Run()
@@ -70,14 +86,19 @@ void CTimedActions::Run()
     if (mState == STATE_INITIAL){
         // Set the timezone and NTP server to use then always go to the next state
         configTzTime(mTimeZone, mNTP_Server);
-        mState = STATE_SETUP;
-    }
-    if (mState == STATE_SETUP){
+        mState = STATE_ACQUIRE_NTP;
+        return;
+
+    } else if (mState == STATE_ACQUIRE_NTP){
         // Go to active state once setup complete
-        if (Setup())
+        if (AcquireNTP())
+            mState = STATE_BACKSCAN;
+        return;
+
+    } else if (mState == STATE_BACKSCAN){
+        if (Backscan())
             mState = STATE_ACTIVE;
-        else
-            return;
+        return;
     }
 
     tm timeinfo;
