@@ -1,6 +1,7 @@
 #include "CWebServer.hpp"
 #include "CTransmitQueue.hpp"
 #include "CRemoteCodes.hpp"
+#include "LittleFS.h"
 
 // Initialise static member variables
 String CWebServer::header = String();
@@ -10,62 +11,15 @@ uint32_t CWebServer::connectionStartTime = 0;
 const char CWebServer::ResponseHeader[] =   "HTTP/1.1 200 OK\n"
                                             "Content-type:text/html\n"
                                             "Connection: close\n";
-                                            
-const char CWebServer::HTML[] =     "<!DOCTYPE html><html><head>"
-                                    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-                                    "<link rel=\"icon\" href=\"data:,\">"
 
-                                    // Style
-                                    "<style>html { font-family: Helvetica; text-align: center; margin: auto;}"
-                                    ".button { background-color: #555555; border: none; padding: 24px 50px;"
-                                    "text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}"
-                                    "table{ margin-left: auto; margin-right: auto;}"
-                                    "th { font-size: 30px; font-weight: bold;}"
-                                    "td { font-size: 40px;}"
-                                    "a { color: black; text-decoration: none;}"
-                                    "</style></head>"
+void CWebServer::Setup(void){
+    server.begin();
 
-                                    // Main table
-                                    "<body><table>"
-
-                                        "<tr>"
-                                          "<th><a href=\"/all_on\">On</a></th>"
-                                          "<th></th>"
-                                          "<th><a href=\"/all_off\">Off</a></th>"
-                                        "</tr>"
-                                    
-                                        "<tr>"
-                                            "<td><a href=\"/0_on\"><button class=\"button\"></button></a></td>"
-                                            "<td>&#128719;</td>"
-                                            "<td><a href=\"/0_off\"><button class=\"button\"></button></a></td>"
-                                        "</tr>"
-
-                                        "<tr>"
-                                            "<td><a href=\"/1_on\"><button class=\"button\"></button></a></td>"
-                                            "<td>?</td>"
-                                            "<td><a href=\"/1_off\"><button class=\"button\"></button></a></td>"
-                                            "</tr>"
-
-                                        "<tr>"
-                                            "<td><a href=\"/2_on\"><button class=\"button\"></button></a></td>"
-                                            "<td>&#127969;</td>"
-                                            "<td><a href=\"/2_off\"><button class=\"button\"></button></a></td>"
-                                        "</tr>"
-
-                                        "<tr>"
-                                            "<td><a href=\"/3_on\"><button class=\"button\"></button></a></td>"
-                                            "<td>&#127877;</td>"
-                                            "<td><a href=\"/3_off\"><button class=\"button\"></button></a></td>"
-                                        "</tr>"
-
-                                        "<tr>"
-                                            "<td><a href=\"/4_on\"><button class=\"button\"></button></a></td>"
-                                            "<td>&#127876;</td>"
-                                            "<td><a href=\"/4_off\"><button class=\"button\"></button></a></td>"
-                                        "</tr>"
-
-                                    "</table></body></html>";
-
+    if(!LittleFS.begin(true)){
+      Serial.println("An error occurred while starting LittleFS - locking up");
+      while (true) {};
+    }
+}
 
 void CWebServer::Background()
 {
@@ -109,7 +63,15 @@ void CWebServer::Background()
         client.println(ResponseHeader);
         
         // Send the webpage HTML
-        client.println(HTML);
+        File htmlFile = LittleFS.open("/main.html");
+
+        uint8_t fileBuf[512];
+        while(htmlFile.available()){
+          int x = 1;
+          size_t bytesRead = htmlFile.read(fileBuf, sizeof(fileBuf));
+          client.write(fileBuf, bytesRead);
+        }
+        htmlFile.close();
         
         // The response ends with a blank line
         client.println();

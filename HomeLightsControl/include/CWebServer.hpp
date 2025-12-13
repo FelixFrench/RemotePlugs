@@ -9,9 +9,7 @@ class CWebServer {
 public:
 
 // Set up the webserver. Must be called before use.
-static void Setup(void){
-    server.begin();
-}
+static void Setup(void);
 
 // Send a transmission if required. Returns true if a transmission was made.
 static void Background(void);
@@ -31,9 +29,6 @@ static const uint32_t timeoutTime = 200;
 
 // The HTTP header of the server's response.
 static const char ResponseHeader[];
-
-// The website HTML.
-static const char HTML[];
 
 };
 #endif
