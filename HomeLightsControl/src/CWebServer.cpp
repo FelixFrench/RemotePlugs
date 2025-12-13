@@ -12,17 +12,20 @@ const char CWebServer::ResponseHeader[] =   "HTTP/1.1 200 OK\n"
                                             "Content-type:text/html\n"
                                             "Connection: close\n";
 
-void CWebServer::Setup(void){
-    server.begin();
-
-    if(!LittleFS.begin(true)){
-      Serial.println("An error occurred while starting LittleFS - locking up");
-      while (true) {};
-    }
-}
-
 void CWebServer::Background()
 {
+
+  if (mState == STATE_INITIAL) {
+    if (LittleFS.begin(true)) {
+      server.begin();
+      mState = STATE_ACTIVE;
+    }
+    else {
+      Serial.println("An error occurred while starting LittleFS");
+    }
+  }
+
+
   // Get any client that is connected and has data available for reading
   WiFiClient client = server.available();
 
