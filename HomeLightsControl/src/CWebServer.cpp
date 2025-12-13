@@ -8,10 +8,6 @@ String CWebServer::header = String();
 WiFiServer CWebServer::server = WiFiServer(80);
 uint32_t CWebServer::connectionStartTime = 0;
 
-const char CWebServer::ResponseHeader[] =   "HTTP/1.1 200 OK\n"
-                                            "Content-type:text/html\n"
-                                            "Connection: close\n";
-
 // State variable
 CWebServer::STATE CWebServer::mState;
 
@@ -64,61 +60,85 @@ void CWebServer::Background()
       }
       // If \n was the first character on this line, then the client HTTP request is complete, so respond.
       else {
+        Serial.print(header);
 
-        // Send the response header
-        client.println(ResponseHeader);
-        
-        // Send the webpage HTML
-        File htmlFile = LittleFS.open("/main.html");
+        // POST method - light action commands
+        if (header.startsWith("POST /")) {
 
-        uint8_t fileBuf[512];
-        while(htmlFile.available()){
-          int x = 1;
-          size_t bytesRead = htmlFile.read(fileBuf, sizeof(fileBuf));
-          client.write(fileBuf, bytesRead);
+          // Just send a No Content header.
+          client.println("HTTP/1.1 204 No Content");
+          client.println("Connection: close");
         }
-        htmlFile.close();
+
+        // GET method - initial webpage load
+        else if (header.startsWith("GET /")) {
+
+          // TODO: Support for favicon.ico
+          
+          // Send an OK header saying html enclosed.
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:text/html");
+          client.println("Connection: close");
+          client.println();
+          
+          // Send the webpage HTML
+          File htmlFile = LittleFS.open("/main.html");
+
+          uint8_t fileBuf[512];
+          while(htmlFile.available()){
+            int x = 1;
+            size_t bytesRead = htmlFile.read(fileBuf, sizeof(fileBuf));
+            client.write(fileBuf, bytesRead);
+          }
+          htmlFile.close();
+        }
+
+        // Any other method not allowed
+        else {
+          client.println("HTTP/1.1 405 Method Not Allowed");
+          client.println("Connection: close");
+        }
         
         // The response ends with a blank line
         client.println();
 
         // Handle any GET requests in the header requesting switching
-        if (header.indexOf("GET /all_on") >= 0) {
+        if (header.indexOf("POST /all_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_0_ON);
           CTransmitQueue::Push(CRemoteCodes::NEW_1_ON);
           CTransmitQueue::Push(CRemoteCodes::NEW_2_ON);
           CTransmitQueue::Push(CRemoteCodes::NEW_3_ON);
           CTransmitQueue::Push(CRemoteCodes::NEW_4_ON);
-        } else if (header.indexOf("GET /all_off") >= 0) {
+        } else if (header.indexOf("POST /all_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_0_OFF);
           CTransmitQueue::Push(CRemoteCodes::NEW_1_OFF);
           CTransmitQueue::Push(CRemoteCodes::NEW_2_OFF);
           CTransmitQueue::Push(CRemoteCodes::NEW_3_OFF);
           CTransmitQueue::Push(CRemoteCodes::NEW_4_OFF);
         }
-        else if (header.indexOf("GET /0_on") >= 0) {
+        else if (header.indexOf("POST /0_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_0_ON);
-        } else if (header.indexOf("GET /0_off") >= 0) {
+        } else if (header.indexOf("POST /0_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_0_OFF);
         }
-        else if (header.indexOf("GET /1_on") >= 0) {
+        else if (header.indexOf("POST /1_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_1_ON);
-        } else if (header.indexOf("GET /1_off") >= 0) {
+        } else if (header.indexOf("POST /1_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_1_OFF);
         }
-        else if (header.indexOf("GET /2_on") >= 0) {
+        else if (header.indexOf("POST /2_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_2_ON);
-        } else if (header.indexOf("GET /2_off") >= 0) {
+        } else if (header.indexOf("POST /2_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_2_OFF);
         }
-        else if (header.indexOf("GET /3_on") >= 0) {
+        else if (header.indexOf("POST /3_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_3_ON);
-        } else if (header.indexOf("GET /3_off") >= 0) {
+        } else if (header.indexOf("POST /3_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_3_OFF);
         }
-        else if (header.indexOf("GET /4_on") >= 0) {
+        else if (header.indexOf("POST /4_on") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_4_ON);
-        } else if (header.indexOf("GET /4_off") >= 0) {
+        } else if (header.indexOf("POST /4_off") >= 0) {
           CTransmitQueue::Push(CRemoteCodes::NEW_4_OFF);
         }
 

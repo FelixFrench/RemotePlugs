@@ -37,8 +37,5 @@ private:
     // Define timeout time in milliseconds (example: 2000ms = 2s)
     static const uint32_t timeoutTime = 200;
 
-    // The HTTP header of the server's response.
-    static const char ResponseHeader[];
-
 };
 #endif
