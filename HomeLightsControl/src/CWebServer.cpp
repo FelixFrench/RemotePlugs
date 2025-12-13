@@ -12,6 +12,9 @@ const char CWebServer::ResponseHeader[] =   "HTTP/1.1 200 OK\n"
                                             "Content-type:text/html\n"
                                             "Connection: close\n";
 
+// State variable
+CWebServer::STATE CWebServer::mState;
+
 void CWebServer::Background()
 {
 

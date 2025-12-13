@@ -33,9 +33,6 @@ void setup()
   // Print own IP address
   Serial.println(WiFi.localIP());
 
-  // Start web server
-  CWebServer::Setup();
-
   digitalWrite(PIN_LED, LOW);
 }
 

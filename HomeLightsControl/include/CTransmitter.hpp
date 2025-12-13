@@ -21,7 +21,7 @@ static void EnqueueTransmission(CRemoteCodes code);
 
 private:
 enum {
-    PIN_TRANSMIT = 12,
+    PIN_TRANSMIT = 27,
     PULSE_LENGTH = 150,
 
     ZERO_HIGH = 1,
