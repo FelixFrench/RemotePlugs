@@ -1,0 +1,45 @@
+Statement language designed to be:
+1st: Easy to parse
+2nd: Human readable/writable
+
+Some example statements:
+    =(T,1234),1_on		"If the time is 1234, do 1_on"
+    =(T,R),1_off		"If sunrise is now, ..."
+    &(>(S,1234),=(T,1234)),2_on	"If sunrise is after 1234 and the time is 1234, ..."
+    |(<(S,387),=(T,554)),2_on	"If sunrise is before 387 or the time is 554, ..."
+    &(=(D,0),=(T,726)),2_off	"If it's Sunday and the time is 726, ..."
+    &(=(D,8),=(T,726)),3_on	"If it's a weekday and the time is 726, ..."
+    &(=(D,9),=(T,726)),3_off	"If it's the weekend and the time is 726, ..."
+    =(T,M(R,926)),4_on		"If the time is the latter of sunrise and 926, ..."
+    =(T,m(R,926)),4_off		"If the time is the earlier of sunrise and 926, ..."
+
+Each line is a separate statement
+Each line consists of a logical expression and a command string, separated by a comma
+The logical expression determines whether or not that command should be transmitted
+Function definitions:
+ '=': Equality operator (int, int -> bool)
+ '>': greater than (int, int -> bool)
+ '<': less than (int, int -> bool)
+ '&': logical and (bool, bool -> bool)
+ '|': logical or (bool, bool -> bool)
+ '!': logical not (bool -> bool)
+ 'M': maximum (int, int -> int)
+ 'm': minimum (int, int -> int)
+T, D, R, and S are known integer values
+ T: Current time in minutes since midnight
+ D: Days since Sunday
+ R: Sunrise time in minutes after midnight
+ S: Sunset time in minutes after midnight
+Special day values:
+ 8: Any weekday (1 thru 5). Only to be used as =(D,8)
+ 9: Any weekend day(0 or 6). Only to be used as =(D,9)
+ (N.B.: 7 is unused)
+
+C++ statement parser function spec:
+Can use a recursive descent parser. Split functions up by their return type.
+The top-level function should take the following parameters:
+- A string of a single statement
+- Integer values of T, D, R & S
+- A const char* cmd of length 16 to populate with any command
+The function should return true if a command needs to be sent and the cmd is valid
+Any syntax errors should result in true being returned with the command "error"
