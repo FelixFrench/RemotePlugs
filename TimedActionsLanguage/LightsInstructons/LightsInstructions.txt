@@ -30,13 +30,13 @@ T, D, R, and S are known integer values
  D: Days since Sunday
  R: Sunrise time in minutes after midnight
  S: Sunset time in minutes after midnight
-Special day values:
+Special day values. These can only be used in the second parameter of '=' with first parameter 'D'
  8: Any weekday (1 thru 5). Only to be used as =(D,8)
  9: Any weekend day(0 or 6). Only to be used as =(D,9)
  (N.B.: 7 is unused)
 
 C++ statement parser function spec:
-Can use a recursive descent parser. Split functions up by their return type.
+Can use a recursive descent parser. Split functions up by their return type (bool/int).
 The top-level function should take the following parameters:
 - A string of a single statement
 - Integer values of T, D, R & S

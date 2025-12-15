@@ -38,3 +38,15 @@ HomeLightsControl/src/NetCreds.h
 /HomeLightsControl/.pio
 HomeLightsControl/include/NetCreds.h
 /HomeLightsControl/PCB
+
+# Visual Studio
+/TimedActionsLanguage/LightsInstructons/.vs
+/TimedActionsLanguage/LightsInstructons/LightsIn.f1c0969e
+*.slnx
+*.vcxproj
+*.filters
+*.user
+/TimedActionsLanguage/LightsInstructons/x64
+/TimedActionsLanguage/LightsInstructons/UnitTests/x64
+TimedActionsLanguage/LightsInstructons/UnitTests/pch.cpp
+TimedActionsLanguage/LightsInstructons/UnitTests/pch.h
